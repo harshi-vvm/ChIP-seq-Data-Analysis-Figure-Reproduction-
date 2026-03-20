@@ -1,0 +1,216 @@
+---
+title: "Replication of Figure A,B,C:Common Peaks Between TAZ, YAP, and TEAD4: Genomic Distribution and Signal Concordance"
+author: "Harshini Muthukumar"
+date: "2026-03-19"
+output: "html_document"
+---
+
+### Figure 1a
+
+Figure 1a and 1b are venn-diagram showing the overlapping peak number of YAP/TAZ and YAP/TAZ/TEAD4
+
+To find overlap/intersection of genomic regions, one can use the famous bedtools on command line or use GenomicRanges in R.
+
+```{r,peak_files,echo=FALSE}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(rtracklayer)
+  library(here)
+  library(VennDiagram)
+  library(grid)
+  library(dplyr)
+  library(ggplot2)
+})
+
+
+TAZ_peaks<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/TAZ_peaks.narrowPeak"))
+YAP_peaks<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/YAP_peaks.narrowPeak"))
+
+
+```
+
+
+```{r,taz_peak,echo=TRUE,warning=FALSE, message=FALSE}
+TAZ_overlap_YAP_peaks<- subsetByOverlaps(TAZ_peaks, YAP_peaks)
+length(TAZ_overlap_YAP_peaks)
+```
+
+
+```{r,yap_taz,echo=TRUE,warning=FALSE, message=FALSE}
+YAP_overlap_TAZ_peaks<- subsetByOverlaps(YAP_peaks, TAZ_peaks)
+length(YAP_overlap_TAZ_peaks)
+```
+
+```{r,overlap,echo=TRUE}
+
+n_YAP <- length(YAP_peaks)
+n_TAZ <- length(TAZ_peaks)
+n_overlap <- length(YAP_overlap_TAZ_peaks)
+
+grid.newpage()
+
+venn.plot <- draw.pairwise.venn(
+  area1 = n_YAP,
+  area2 = n_TAZ,
+  cross.area = n_overlap,
+  category = c("YAP", "TAZ"),
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 2,
+  cat.cex = 2
+)
+
+grid.draw(venn.plot)
+```
+
+## Figure 1: Overlap between TAZ and YAP ChIP-seq peaks
+
+YAP (Yes-Associated Protein) and TAZ (Transcriptional Co-Activator with PDZ-binding motif) are the two core effectors of the Hippo signaling pathway. They are paralogs — meaning they share significant structural similarity and are often assumed to bind the same genomic regions.
+
+However, whether they truly co-occupy the same sites across the genome, or have distinct.binding preferences, is a key biological question.To address this, we called peaks from ChIP-seq experiments for both YAP and TAZ separately and then asked: how much do their binding sites overlap? The Venn diagram shows that out of all peaks identified, **7,164 are shared** between YAP and TAZ, while **3,555 are TAZ-specific** and **2,643 are YAP-specific**. 
+
+The majority of binding sites (~67%) are co-occupied, consistent with their role as functional paralogs that often work together. However, the unique sites suggest each protein may also have independent regulatory roles — TAZ appears 
+to have more unique binding sites than YAP in this dataset, hinting at divergent functions beyond their shared targets.
+
+```{r,TEAD4_overlap,echo=TRUE}
+TEAD4_peak<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/TEAD4_peaks.narrowPeak"))
+
+YAP_overlap_TAZ_peaks_overlap_TEAD4<- subsetByOverlaps(YAP_overlap_TAZ_peaks, TEAD4_peak)
+
+
+n_YAP_TAZ <- length(YAP_overlap_TAZ_peaks)
+n_TEAD4 <- length(TEAD4_peak)
+n_overlap2 <- length(YAP_overlap_TAZ_peaks_overlap_TEAD4)
+
+grid.newpage()
+
+venn.plot2 <- draw.pairwise.venn(
+  area1 = n_YAP_TAZ,
+  area2 = n_TEAD4,
+  cross.area = n_overlap2,
+  category = c("YAP/TAZ", "TEAD4"),
+  fill = c("lightgreen", "orange"),
+  alpha = 0.5,
+  cex = 2,
+  cat.cex = 2
+)
+
+grid.draw(venn.plot2)
+
+
+```
+
+## Figure 2: Overlap between TEAD4 and YAP/TAZ binding sites
+
+YAP and TAZ are **transcriptional co-activators** — they do not bind DNA directly. Instead,they work by physically interacting with DNA-binding transcription factors, most prominently the TEAD family (TEAD1–4). TEAD4 is the dominant TEAD family member in many cell types and serves as the primary DNA anchor that recruits YAP/TAZ to target gene promoters and enhancers.
+
+To validate that the YAP/TAZ peaks we identified are functionally meaningful, we asked: do the combined YAP/TAZ binding sites (from Figure 1) overlap with regions bound by TEAD4? The Venn diagram shows that **5,965 sites are shared** between TEAD4 and YAP/TAZ, representing the canonical YAP/TAZ–TEAD co-bound regions that are most likely to be actively regulating transcription. 
+
+TEAD4 has **5,547 unique sites** — these may reflect TEAD4 binding with other co-factors independently of YAP/TAZ. Only **1,199 YAP/TAZ sites** lack TEAD4, which could represent TEAD-independent YAP/TAZ interactions (e.g., via AP-1 or other partners). This overlap analysis gives us confidence that our ChIP-seq peaks are capturing biologically relevant co-regulatory complexes.
+
+### Fig 1C
+
+```{r,summit,echo=FALSE}
+TAZ_summit<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/TAZ_summits.bed"))
+
+TAZ_summit<- TAZ_summit[TAZ_summit$name %in% TAZ_overlap_YAP_peaks$name]
+
+TEAD4_summit<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/TEAD4_summits.bed"))
+
+```
+```{r,hits,echo=FALSE}
+TAZ_500bp_window<- resize(TAZ_summit, width = 500, fix="center")
+
+hits<- findOverlaps(TEAD4_summit, TAZ_500bp_window)
+
+```
+```{r,dist,echo=FALSE}
+summit_distance<- distance(TEAD4_summit[queryHits(hits)], TAZ_summit[subjectHits(hits)])
+
+```
+```{r,tead4_summit,echo=TRUE}
+TEAD4_summit[queryHits(hits)][summit_distance ==0]
+```
+
+```{r,taz_summit,echo=TRUE}
+TAZ_summit[subjectHits(hits)][summit_distance ==0]
+```
+
+```{r,signed_dist,echo=FALSE}
+# Compute signed distances
+signed_distance <- function(A, B) {
+  # Compute unsigned distance
+  dist <- distance(A, B)
+  
+  # Determine signs based on whether A precedes or follows B
+  sign <- ifelse(start(A) < start(B), -1, 1)
+  
+  # Apply sign to distance
+  dist * sign
+}
+
+```
+
+```{r,dist_df,echo=TRUE}
+
+summit_distance<- signed_distance(TEAD4_summit[queryHits(hits)],
+                                  TAZ_summit[subjectHits(hits)])
+
+distance_df<- table(summit_distance) %>%
+  tibble::as_tibble() 
+
+distance_df
+```
+```{r,geom_plot,echo=TRUE}
+distance_df %>%
+  ggplot(aes(x=summit_distance, y = n)) +
+  geom_point()
+```
+
+```{r,plot,echo=TRUE}
+distance_df %>%
+  mutate(summit_distance = as.numeric(summit_distance)) %>%
+  arrange(summit_distance) %>%
+  ggplot(aes(x=summit_distance, y = n)) +
+  geom_point()
+```
+```{r,plot_2,echo=TRUE}
+distance_df %>%
+  mutate(summit_distance = as.numeric(summit_distance)) %>%
+  arrange(summit_distance) %>%
+  ggplot(aes(x=summit_distance, y = n)) +
+  geom_line()
+```
+
+```{r,df_binned,echo=FALSE}
+df_binned <- distance_df %>%
+  mutate(summit_distance = as.numeric(summit_distance)) %>%
+  arrange(summit_distance) %>%
+  mutate(bin = floor(summit_distance / 5) * 5) %>%  # Create bins by grouping every 5 bp
+  group_by(bin) %>%
+  summarise(n = mean(n, na.rm = TRUE))  # Calculate average 'n' for each bin
+```
+
+```{r,plot_3,echo=FALSE}
+df_binned %>%
+  ggplot(aes(x=bin, y = n)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(-250, 0, 250)) +
+  xlab("distance to the summit \nof TAZ peaks (bp)") +
+  ylab("peak density") +
+  theme_classic(base_size = 14) 
+```
+
+
+## Figure 3: Peak density relative to TAZ summit
+
+This plot shows how ChIP-seq signal is distributed around the center (summit) 
+of TAZ binding sites within a ±250 bp window. 
+
+The sharp spike at position 0 tells us that the signal is tightly concentrated 
+exactly at the binding site — this is what we expect for a transcription factor 
+like TAZ, which binds short, specific DNA sequences. The quick drop-off on both 
+sides confirms the data is clean and the immunoprecipitation worked well. 
+This figure serves as both a **quality check** for the ChIP-seq experiment and 
+evidence that TAZ is binding to precise, well-defined locations in the genome.
+

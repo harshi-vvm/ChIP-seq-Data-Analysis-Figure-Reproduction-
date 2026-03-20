@@ -1,0 +1,245 @@
+---
+title: "Replication of Figure D–F:Proximity to TSS and Binding Signal Concordance Between TAZ and TEAD4"
+author: "Harshini Muthukumar"
+date: "2026-03-19"
+output: "html_document"
+---
+
+### Figure 1D
+
+Look at figure 1d, it is a scatter plot.
+ This is the number of sequencing reads
+x-axis: TEAD4 signal
+y-axis: YAP1 signal
+From the figure description:
+
+Linear correlation between the signal of YAP or TAZ and TEAD4 peaks in the 5522 shared binding sites. r2 is the coefficients of determination of the two correlations.
+
+
+
+```{r,peak,echo=TRUE}
+suppressWarnings(
+  suppressMessages({
+    library(GenomicRanges)
+    library(rtracklayer)  # for reading bed file
+    library(here)
+    library(dplyr)
+    library(ggplot2)
+    library(readr)
+    library(EnsDb.Hsapiens.v86)
+    library(GenomicFeatures)
+    library(ggpmisc)
+  })
+)
+
+TAZ_peaks<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/TAZ_peaks.narrowPeak"))
+YAP_peaks<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/YAP_peaks.narrowPeak"))
+TEAD4_peak<- import(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/TEAD4_peaks.narrowPeak"))
+
+YAP_overlap_TAZ_peaks<- subsetByOverlaps(YAP_peaks, TAZ_peaks)
+
+YAP_overlap_TAZ_peaks_overlap_TEAD4<- subsetByOverlaps(YAP_overlap_TAZ_peaks, TEAD4_peak)
+
+
+
+```
+
+
+
+```{r,commonpeak,echo=FALSE}
+export(YAP_overlap_TAZ_peaks_overlap_TEAD4, 
+       con = here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/YAP_TAZ_TEAD4_common.bed"))
+```
+
+The signal is the number of reads fall/mapped into those peaks/regions. and normalized to total number of reads (library size) for each experiment.
+
+**bedtools multicov**, reports the count of alignments from multiple position-sorted and indexed BAM files that overlap intervals in a BED file. Specifically, for each BED interval provided, it reports a separate count of overlapping alignments from each BAM file.
+
+```{bash,eval=FALSE}
+cd data/fastq
+bedtools multicov -bams YAP.sorted.bam TAZ.sorted.bam TEAD4.sorted.bam \
+  -bed YAP_TAZ_TEAD4_common.bed > YAP_TAZ_TEAD4_counts.tsv
+```
+
+the total number of priamry mapped reads are: 23653961, 26789648 and 34332907 for YAP, TAZ and TEAD4, respectively.Using **SAMtools Flagsat** I found out this information
+
+```{r,counts,echo=FALSE}
+
+counts<- read_tsv(here("C:/Users/harzi/OneDrive/Desktop/chip_seq_peak/YAP_TAZ_TEAD4_counts.tsv"), col_names = FALSE)
+colnames(counts)<- c("chr", "start", "end", "name", "score", "value", "YAP1", "TAZ", "TEAD4")
+
+```
+```{r,rpkm,echo=TRUE}
+counts<- counts %>%
+  mutate(YAP1 = YAP1/23653961 * 10^6,
+         TAZ = TAZ/26789648 * 10^6,
+         TEAD4 = TEAD4/34332907 * 10^6)
+
+head(counts)
+```
+```{r,plot_1,echo=TRUE}
+ggplot(counts, aes(x=TEAD4, y= YAP1)) +
+  geom_point()
+```
+
+```{r,outlier,echo=TRUE}
+counts %>% dplyr::filter(TEAD4 > 60)
+```
+There is an outlier with strong signal (checked it on IGV to see if it is real, it could be a black-listed region with strong signal).**It looks real on IGV and I checked it is not in one of the blacklisted regions**.
+
+
+```{r,log2scale,echo=TRUE}
+ggplot(counts, aes(x=TEAD4, y= YAP1)) +
+  geom_point(color = "#ff4000") +
+  scale_x_continuous(trans = 'log2') +
+  scale_y_continuous(trans = 'log2') +
+  theme_classic(base_size = 14) +
+  xlab("TEAD4 signal") +
+  ylab("YAP1 signal")
+```
+
+
+```{r,plot_2,echo=TRUE}
+ggplot(counts, aes(x=TEAD4, y= YAP1)) +
+  geom_point(color = "#ff4000") +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +  # Linear regression line
+  stat_poly_eq(
+    aes(label = ..rr.label..),
+    formula = y ~ x,
+    parse = TRUE,
+    color = "black"
+  ) +
+  scale_x_continuous(trans = 'log2') +
+  scale_y_continuous(trans = 'log2') +
+  theme_classic(base_size = 14) +
+  xlab("TEAD4 signal") +
+  ylab("YAP1 signal")
+```
+```{r,plot_3,echo=TRUE}
+ggplot(counts, aes(x=TEAD4, y= TAZ)) +
+  geom_point(color = "#ff4000") +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +  # Linear regression line
+  stat_poly_eq(
+    aes(label = ..rr.label..),
+    formula = y ~ x,
+    parse = TRUE,
+    color = "black"
+  ) +
+  scale_x_continuous(trans = 'log2') +
+  scale_y_continuous(trans = 'log2') +
+  theme_classic(base_size = 14) +
+  xlab("TEAD4 signal") +
+  ylab("TAZ signal")
+
+```
+
+The scatter plot shows a strong positive correlation between TEAD4 and TAZ binding signals across genomic regions, with an R² of 0.67, indicating that approximately 67% of the variance in TAZ signal is explained by TEAD4 signal. Both axes are on a log scale, and the linear trend holds consistently across the full range of signal intensities, suggesting that regions with high TEAD4 occupancy tend to also exhibit high TAZ binding. The spread around the regression line reflects some degree of independent binding activity — there are regions where TAZ and TEAD4 signals diverge — but the overall correlation is robust. This is consistent with the known functional relationship between TAZ and TEAD4, where TAZ acts as a transcriptional co-activator that interacts directly with TEAD family members to co-occupy regulatory elements genome-wide.
+
+
+### Figure 1F
+
+Absolute distance of YAP peaks (n=7709), TAZ peaks (n=9798), TEAD4 peaks (n=8406) or overlapping YAP/TAZ/TEAD peaks (n=5522) to the nearest TSS.
+
+Figure 1f is a stacked bar plot. It shows the proportion of the peaks grouped by their distance to the closest TSS (transcription start site).
+
+```{r,transcripts,echo=FALSE}
+
+hg38_transcripts <- transcripts(EnsDb.Hsapiens.v86)
+tss_gr <- promoters(hg38_transcripts, upstream=0, downstream=1)
+suppressWarnings({
+  seqlevelsStyle(tss_gr) <- "UCSC"
+  distance_to_tss <- distanceToNearest(YAP_peaks, tss_gr)
+})
+
+```
+
+```{r,echo=TRUE}
+mcols(distance_to_tss)
+head(mcols(distance_to_tss)$distance)
+```
+
+```{r,dist,echo=FALSE}
+YAP_dist <- suppressWarnings(mcols(distanceToNearest(YAP_peaks, tss_gr))$distance)
+TAZ_dist <- suppressWarnings(mcols(distanceToNearest(TAZ_peaks, tss_gr))$distance)
+TEAD4_dist <- suppressWarnings(mcols(distanceToNearest(TEAD4_peak, tss_gr))$distance)
+```
+
+```{r,yap_dist,echo=FALSE}
+tss_distance_df<- bind_rows(data.frame(factor = "YAP", distance = YAP_dist),
+          data.frame(factor = "TAZ", distance = TAZ_dist),
+          data.frame(factor = "TEAD4", distance = TEAD4_dist))
+          
+head(tss_distance_df)
+```
+
+```{r}
+tss_distance_df %>%
+  mutate(category = case_when(
+    distance < 1000 ~ "<1kb",
+    distance >=1000 & distance < 10000 ~ "1-10kb",
+    distance >= 10000 & distance <=100000 ~ "10-100kb",
+    distance > 100000 ~ "100kb"
+  )) %>%
+  head()
+```
+```{r,counts_per_category,echo=TRUE}
+counts_per_category<- tss_distance_df %>%
+  mutate(category = case_when(
+    distance < 1000 ~ "<1kb",
+    distance >=1000 & distance < 10000 ~ "1-10kb",
+    distance >= 10000 & distance <=100000 ~ "10-100kb",
+    distance > 100000 ~ ">100kb"
+  )) %>%
+  group_by(factor, category) %>%
+  count()
+
+counts_per_category
+```
+
+```{r,total_count,echo=TRUE}
+total_counts<- tss_distance_df %>%
+  mutate(category = case_when(
+    distance < 1000 ~ "<1kb",
+    distance >=1000 & distance < 10000 ~ "1-10kb",
+    distance >= 10000 & distance <=100000 ~ "10-100kb",
+    distance > 100000 ~ ">100kb"
+  )) %>%
+  count(factor, name = "total")
+
+total_counts
+```
+
+```{r,bar+plot,echo=TRUE}
+merged_df<- left_join(counts_per_category, total_counts)
+merged_df %>%
+  mutate(Percentage = n/total * 100) %>%
+  ggplot(aes(x= factor, y = Percentage, fill = category)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Distance to TSS",
+    x = "Group",
+    y = "Percentage"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  theme_classic(base_size = 14)
+```
+
+```{r,barplot_2,echo=TRUE}
+merged_df$category<- factor(merged_df$category, 
+                            levels = c("<1kb", "1-10kb", "10-100kb", ">100kb"))
+merged_df %>%
+  mutate(Percentage = n/total * 100) %>%
+  ggplot(aes(x= factor, y = Percentage, fill = category)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Distance to TSS",
+    x = "Group",
+    y = "Percentage"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_manual(values = c("#EF3E2B", "#F16161", "#F59595", "#FAD1C8")) +
+  theme_classic(base_size = 14)
+```
+
+
+The stacked bar plot illustrates the distribution of TAZ, TEAD4, and YAP binding sites relative to the nearest transcription start site (TSS), categorized across four distance bins. Across all three factors, the majority of binding sites fall within the 10–100kb range, indicating a predominant association with distal regulatory elements such as enhancers rather than proximal promoter regions. Binding within 1kb of the TSS, reflective of direct promoter occupancy, accounts for approximately 15–20% of sites for each factor, with TAZ and TEAD4 showing marginally greater proximal binding than YAP. Notably, YAP exhibits a larger proportion of sites beyond 100kb from the nearest TSS, suggesting a greater tendency to occupy distal or intergenic regions relative to TAZ and TEAD4. Overall, while the three factors share broadly similar genomic distribution profiles — consistent with their known co-occupancy — these subtle differences in distal binding may point to factor-specific regulatory functions beyond their shared roles in the Hippo signaling pathway.
