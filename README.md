@@ -25,10 +25,10 @@ Contains R Markdown (`.Rmd`) and rendered HTML files for all downstream analysis
 
 | File | Description |
 |------|-------------|
-| `04_figure1_a_b_c.Rmd` / `.html` | Re-create Fig 1 panels a, b, c |
-| `05_figure1_d_f.Rmd` / `.html` | Re-create Fig 1 panels d, f |
-| `06_figure1_g_h.Rmd` / `.html` | Re-create Fig 1 panels g, h |
-| `07_figure1_i_j.Rmd` / `.html` | Re-create Fig 1 panels i, j |
+| `figure_a_b_c.Rmd` / `.html` | Re-create Fig 1 panels a, b, c |
+| `figure_d_f.Rmd` / `.html` | Re-create Fig 1 panels d, f |
+| `figure_g_h.Rmd` / `.html` | Re-create Fig 1 panels g, h |
+| `figure_i_j.Rmd` / `.html` | Re-create Fig 1 panels i, j |
 
 ---
 
