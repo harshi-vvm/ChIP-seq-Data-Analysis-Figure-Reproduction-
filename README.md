@@ -43,9 +43,6 @@ Contains R Markdown (`.Rmd`) and rendered HTML files for all downstream analysis
 2. Follow the pre-processing steps in the `pre-processing/` folder in order — starting from raw FASTQ files through to peak calling and bigwig generation.
 
 3. Once pre-processing is complete, open the `.Rmd` files in the `analysis/` folder in RStudio and knit them to reproduce each figure panel.
-```
-
----
 
 ## Requirements
 
