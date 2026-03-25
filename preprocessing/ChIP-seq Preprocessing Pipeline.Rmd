@@ -1,0 +1,139 @@
+---
+title: "ChIP-seq Preprocessing Pipeline"
+date: "24-03-2025"
+author: "Harshini Muthukumar"
+output:
+  html_document:
+    df_print: paged
+    html_document: null
+    toc: true
+    toc_float: true
+    toc_depth: 3
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+---
+
+
+
+**From Raw FASTQ to Peak Calls**
+
+This document covers the full preprocessing pipeline used to reproduce figures from the YAP/TAZ/TEAD4 ChIP-seq paper. The downstream visualization and figure reproduction is handled separately in the analysis markdowns. 
+
+**Tools used: FastQC, Bowtie2, SAMtools, deepTools (bamCoverage), and MACS3.**
+
+## Download fastq
+
+[GSE Dataset link](https://www.ncbi.nlm.nih.gov/sra?term=SRX883576)
+
+The relationship of Experiment to Run is a 1-to-many relationship.Also, to reduce the size of the files. I will only take one SRR for the same SRX sample
+
+```{bash,eval=FALSE}
+fastq-dl --accession SRX883576  --group-by-experiment
+
+```
+
+
+```{bash,eval=FALSE}
+cd data/fastq
+
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR181/007/SRR1810907/SRR1810907.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR181/008/SRR1810918/SRR1810918.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR181/000/SRR1810900/SRR1810900.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR181/002/SRR1810912/SRR1810912.fastq.gz
+
+```
+
+fastqc looks at the quality of the reads
+
+```{bash,eval=FALSE}
+for fq in *fastq.gz
+do
+  fastqc $fq
+done
+```
+
+Based on the FastQC results, all four samples show high Phred quality scores, low adapter content, and acceptable GC content distribution. Overall, the sequencing data appears to be of good quality with no major biases or issues detected, making it suitable for downstream analysis.
+
+
+## Alignment with Bowtie2
+
+The ChIP-seq signal can happen to anywhere in the genome, so need an aligner to align the reads to the genome.It is single-end read with 50 base pairs.
+
+Bowtie2 is ideal here because it is optimized for short reads aligning to large mammalian genomes and is the community standard for ChIP-seq preprocessing.
+
+Downloaded the **GRCH38 (aka, hg38 without decoy) index file** from bowtie2 official doucmentation
+
+```{bash,eval=FALSE}
+cd data/
+
+bowtie2 -x reference/GRCh38_noalt_as/GRCh38_noalt_as -U fastq/YAP.fastq.gz -S fastq/YAP1.sam --threads 8  --no-mixed --no-discordant -k 1
+
+```
+
+-x reference/GRCh38_noalt_as/GRCh38_noalt_as: The path to the Bowtie2 reference genome index (built with bowtie2-build reference.fa reference_index).
+
+-U input.fastq: Input FASTQ file for single-end reads.
+
+-S output.sam: Output alignment file in SAM format.
+
+--threads 8: Use 8 threads to speed up alignment.
+
+--no-mixed: Ensures that only properly paired reads are reported (not relevant for single-end data but good for ChIP-seq).
+
+--no-discordant: Prevents reporting discordant alignments (not relevant for single-end data but ensures consistent results for paired-end).
+
+-k 1: Reports only the best alignment for each read (important for ChIP-seq to avoid multi-mapping)
+
+**convert sam to bam**
+
+```{bash,eval=FALSE}
+conda install samtools -c bioconda
+
+for sam in fastq/*sam
+do
+  samtools view -bS $sam > ${sam/sam/bam}
+done
+```
+
+```{bash,eval=FALSE}
+for bam in fastq/*bam
+do
+  samtools sort -@ 4 -o ${bam/bam/sorted.bam} $bam
+done
+```
+
+```{bash,eval=FALSE}
+for bam in fastq/*sorted.bam
+do 
+  samtools index $bam
+done
+```
+
+## Generate bigwig files and peak calling
+
+A BigWig file is a binary file format commonly used in bioinformatics to efficiently store and visualize continuous data over genomic coordinates, such as read coverage or signal intensity. It is derived from the Wiggle (WIG) format but optimized for faster access and reduced file size, making it suitable for large-scale genomic data.
+
+Using deeptools for this
+
+```{bash,eval=FALSE}
+cd data/fastq
+bamCoverage --bam YAP.sorted.bam --normalizeUsing RPKM --extendReads 200 -o YAP1.bw
+```
+
+
+used default bin size 50 bp.
+
+**Peak Calling**
+
+```{bash,eval=FALSE}
+pip install --upgrade macs3
+
+```
+
+```{bash,eval=FALSE}
+macs3 callpeak -t YAP.sorted.bam -c IgG.sorted.bam -f BAM -n YAP -g hs --outdir YAP_peak
+
+```
+
+An IgG control sample is used to model background noise during peak calling
